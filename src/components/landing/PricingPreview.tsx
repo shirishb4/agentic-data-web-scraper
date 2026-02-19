@@ -5,8 +5,8 @@ import { Check } from "lucide-react";
 const tiers = [
   {
     name: "Starter",
-    price: "$49",
-    period: "/mo",
+    price: "₹1,000",
+    period: "/mo + GST",
     desc: "For prototypes and small-scale projects.",
     features: ["Limited AI agents", "Static & basic dynamic sites", "CSV / JSON export", "Community support"],
     cta: "Get Started",
@@ -14,8 +14,8 @@ const tiers = [
   },
   {
     name: "Professional",
-    price: "$199",
-    period: "/mo",
+    price: "₹3,000",
+    period: "/mo + GST",
     desc: "For teams scaling their data extraction.",
     features: ["Multiple AI agents", "Dynamic website scraping", "Scheduling & API access", "Priority support"],
     cta: "Start Free Trial",
