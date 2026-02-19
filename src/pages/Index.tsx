@@ -1,14 +1,36 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import SEOHead from "@/components/SEOHead";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import HeroSection from "@/components/landing/HeroSection";
+import ProblemSection from "@/components/landing/ProblemSection";
+import SolutionSection from "@/components/landing/SolutionSection";
+import FeaturesSection from "@/components/landing/FeaturesSection";
+import UseCasesSection from "@/components/landing/UseCasesSection";
+import ArchitecturePreview from "@/components/landing/ArchitecturePreview";
+import PricingPreview from "@/components/landing/PricingPreview";
+import EnterpriseSection from "@/components/landing/EnterpriseSection";
+import FinalCTA from "@/components/landing/FinalCTA";
 
-const Index = () => {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
-};
+const Index = () => (
+  <>
+    <SEOHead
+      title="AI Web Scraping with Autonomous AI Agents | Intelligent Data Extraction Platform"
+      description="Enterprise-ready AI web scraping platform using autonomous AI agents for scalable, compliant, and intelligent data extraction from dynamic websites."
+    />
+    <Navbar />
+    <main>
+      <HeroSection />
+      <ProblemSection />
+      <SolutionSection />
+      <FeaturesSection />
+      <UseCasesSection />
+      <ArchitecturePreview />
+      <PricingPreview />
+      <EnterpriseSection />
+      <FinalCTA />
+    </main>
+    <Footer />
+  </>
+);
 
 export default Index;
