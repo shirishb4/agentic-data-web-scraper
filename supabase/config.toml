@@ -1,1 +1,4 @@
 project_id = "kledwfoxrcoettjuqaed"
+
+[functions.scraper-webhook]
+verify_jwt = false
