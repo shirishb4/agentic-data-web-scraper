@@ -7,6 +7,7 @@ import SolutionSection from "@/components/landing/SolutionSection";
 import FeaturesSection from "@/components/landing/FeaturesSection";
 import UseCasesSection from "@/components/landing/UseCasesSection";
 import ArchitecturePreview from "@/components/landing/ArchitecturePreview";
+import CaseStudiesPreview from "@/components/landing/CaseStudiesPreview";
 import PricingPreview from "@/components/landing/PricingPreview";
 import EnterpriseSection from "@/components/landing/EnterpriseSection";
 import FinalCTA from "@/components/landing/FinalCTA";
@@ -24,6 +25,7 @@ const Index = () => (
       <SolutionSection />
       <FeaturesSection />
       <UseCasesSection />
+      <CaseStudiesPreview />
       <ArchitecturePreview />
       <PricingPreview />
       <EnterpriseSection />
