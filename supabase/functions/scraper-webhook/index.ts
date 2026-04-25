@@ -39,12 +39,58 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Forward request to n8n webhook
-    const n8nResponse = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload || {}),
-    });
+    // Build a payload compatible with both standard Webhook and Chat Trigger nodes.
+    // n8n's "When chat message received" trigger expects: { chatInput, sessionId, action: "sendMessage" }
+    const incoming = (payload ?? {}) as Record<string, unknown>;
+    const userMessage =
+      (incoming.chatInput as string | undefined) ??
+      (incoming.message as string | undefined) ??
+      (incoming.url as string | undefined) ??
+      (incoming.query as string | undefined) ??
+      "";
+
+    const isChatEndpoint = webhookUrl.endsWith("/chat") || webhookUrl.includes("/chat?");
+
+    const body = isChatEndpoint
+      ? {
+          action: "sendMessage",
+          sessionId:
+            (incoming.sessionId as string | undefined) ??
+            `agentic-scrape-${crypto.randomUUID()}`,
+          chatInput: userMessage,
+          ...incoming,
+        }
+      : { ...incoming, chatInput: userMessage, message: userMessage };
+
+    console.log(`[scraper-webhook] ${agent} -> ${webhookUrl} (chat=${isChatEndpoint})`);
+
+    // n8n AI agents can take 30s+ to respond. Allow up to 90s.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90_000);
+    let n8nResponse: Response;
+    try {
+      n8nResponse = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      clearTimeout(timeout);
+      const msg = e instanceof Error ? e.message : String(e);
+      return new Response(
+        JSON.stringify({
+          agent,
+          error: "Failed to reach n8n",
+          hint: msg.includes("abort")
+            ? "n8n took longer than 90s to respond. Check the workflow execution in n8n."
+            : "Verify the webhook URL is reachable and the workflow is Active.",
+          detail: msg,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    clearTimeout(timeout);
 
     const rawText = await n8nResponse.text();
     let data: unknown;
