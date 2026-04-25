@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const cases = [
   {
@@ -133,23 +134,83 @@ const toRow = (item: unknown): VideoRow | null => {
 const extractRows = (data: unknown): VideoRow[] => {
   if (data === null || data === undefined) return [];
 
-  // String — try JSON parse, else try to find JSON inside markdown/code fences
+  // String — try JSON parse, else try to find JSON / markdown table inside text
   if (typeof data === "string") {
-    const trimmed = data.trim();
+    let trimmed = data.trim();
+    // Strip ```json ... ``` or ``` ... ``` code fences
+    const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) trimmed = fence[1].trim();
+
+    // 1) Direct JSON parse
     try {
       return extractRows(JSON.parse(trimmed));
     } catch {
-      // try to extract a JSON block
-      const match = trimmed.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
-      if (match) {
+      /* fall through */
+    }
+
+    // 2) Find the largest JSON array first (most n8n agents return arrays)
+    const arrayMatch = trimmed.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        return extractRows(JSON.parse(arrayMatch[0]));
+      } catch {
+        /* fall through */
+      }
+    }
+
+    // 3) Multiple JSON objects concatenated / NDJSON
+    const objectMatches = trimmed.match(/\{[\s\S]*?\}(?=\s*[\{,\n]|\s*$)/g);
+    if (objectMatches && objectMatches.length > 1) {
+      const rows: VideoRow[] = [];
+      for (const m of objectMatches) {
         try {
-          return extractRows(JSON.parse(match[0]));
+          const parsed = JSON.parse(m);
+          rows.push(...extractRows(parsed));
         } catch {
-          /* fall through */
+          /* skip bad chunk */
         }
       }
-      return [];
+      if (rows.length) return rows;
     }
+
+    // 4) Single JSON object fallback
+    const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      try {
+        return extractRows(JSON.parse(objectMatch[0]));
+      } catch {
+        /* fall through */
+      }
+    }
+
+    // 5) Markdown table parser — | col1 | col2 | ...
+    const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().startsWith("|"));
+    if (lines.length >= 2) {
+      const split = (l: string) =>
+        l
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((c) => c.trim());
+      const headers = split(lines[0]).map((h) => h.toLowerCase());
+      // skip separator row (---)
+      const bodyStart = lines[1] && /^[\s|:-]+$/.test(lines[1]) ? 2 : 1;
+      const rows: VideoRow[] = [];
+      for (let i = bodyStart; i < lines.length; i++) {
+        const cells = split(lines[i]);
+        if (cells.every((c) => /^[-:\s]*$/.test(c))) continue;
+        const obj: Record<string, unknown> = {};
+        headers.forEach((h, idx) => {
+          obj[h] = cells[idx] ?? "";
+        });
+        const r = toRow(obj);
+        if (r) rows.push(r);
+      }
+      if (rows.length) return rows;
+    }
+
+    return [];
   }
 
   if (Array.isArray(data)) {
@@ -161,12 +222,13 @@ const extractRows = (data: unknown): VideoRow[] => {
 
   if (typeof data === "object") {
     const o = data as Record<string, unknown>;
-    // common n8n chat output shapes
-    if ("output" in o) return extractRows(o.output);
-    if ("data" in o) return extractRows(o.data);
-    if ("results" in o) return extractRows(o.results);
-    if ("videos" in o) return extractRows(o.videos);
-    if ("items" in o) return extractRows(o.items);
+    // common n8n chat output shapes — try unwrapping and aggregating
+    const wrappers = ["output", "data", "results", "videos", "items", "rows", "response", "result", "message", "text"];
+    const collected: VideoRow[] = [];
+    for (const w of wrappers) {
+      if (w in o) collected.push(...extractRows(o[w]));
+    }
+    if (collected.length) return collected;
     const single = toRow(o);
     return single ? [single] : [];
   }
@@ -310,17 +372,31 @@ const CaseStudies = () => {
             </p>
           </motion.div>
 
-          <div className="mx-auto mt-16 max-w-4xl space-y-12">
-            {cases.map((c, i) => {
-              const res = responses[c.webhookAgent];
-              return (
-                <motion.div
-                  key={c.title}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.12, duration: 0.6 }}
-                  className="rounded-xl border border-border bg-card p-8 transition-all hover:border-primary/30 hover:glow-brown"
-                >
+          <div className="mx-auto mt-16 max-w-5xl">
+            <Tabs defaultValue={cases[0].webhookAgent} className="w-full">
+              <TabsList className="grid w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-3">
+                {cases.map((c) => (
+                  <TabsTrigger
+                    key={c.webhookAgent}
+                    value={c.webhookAgent}
+                    className="flex h-auto items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground transition-all data-[state=active]:border-primary/40 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none"
+                  >
+                    <c.icon className="h-4 w-4" />
+                    {c.title.replace(" Agent", "")}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {cases.map((c) => {
+                const res = responses[c.webhookAgent];
+                return (
+                  <TabsContent key={c.webhookAgent} value={c.webhookAgent} className="mt-6">
+                    <motion.div
+                      key={c.title}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="rounded-xl border border-border bg-card p-8 transition-all hover:border-primary/30 hover:glow-brown"
+                    >
                   {/* Header */}
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
@@ -543,8 +619,10 @@ const CaseStudies = () => {
                     )}
                   </AnimatePresence>
                 </motion.div>
-              );
-            })}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
           </div>
         </section>
       </main>
