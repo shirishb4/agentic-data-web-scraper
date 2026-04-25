@@ -46,10 +46,34 @@ Deno.serve(async (req) => {
       body: JSON.stringify(payload || {}),
     });
 
-    const data = await n8nResponse.json().catch(() => ({ status: "triggered" }));
+    const rawText = await n8nResponse.text();
+    let data: unknown;
+    try {
+      data = rawText ? JSON.parse(rawText) : { status: "triggered" };
+    } catch {
+      data = { status: "triggered", raw: rawText };
+    }
+
+    if (!n8nResponse.ok) {
+      return new Response(
+        JSON.stringify({
+          agent,
+          error: `n8n responded with ${n8nResponse.status}`,
+          hint:
+            n8nResponse.status === 404
+              ? "The webhook URL is wrong or the n8n workflow is not Active. Use the Production URL from the Webhook/Chat Trigger node (format: /webhook/<uuid> or /webhook/<uuid>/chat), not the workflow editor URL."
+              : undefined,
+          n8nResponse: data,
+        }),
+        {
+          status: 200, // return 200 so the client can read the body cleanly
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     return new Response(JSON.stringify({ agent, data }), {
-      status: n8nResponse.status,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
