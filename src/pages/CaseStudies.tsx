@@ -372,17 +372,31 @@ const CaseStudies = () => {
             </p>
           </motion.div>
 
-          <div className="mx-auto mt-16 max-w-4xl space-y-12">
-            {cases.map((c, i) => {
-              const res = responses[c.webhookAgent];
-              return (
-                <motion.div
-                  key={c.title}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.12, duration: 0.6 }}
-                  className="rounded-xl border border-border bg-card p-8 transition-all hover:border-primary/30 hover:glow-brown"
-                >
+          <div className="mx-auto mt-16 max-w-5xl">
+            <Tabs defaultValue={cases[0].webhookAgent} className="w-full">
+              <TabsList className="grid w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-3">
+                {cases.map((c) => (
+                  <TabsTrigger
+                    key={c.webhookAgent}
+                    value={c.webhookAgent}
+                    className="flex h-auto items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground transition-all data-[state=active]:border-primary/40 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none"
+                  >
+                    <c.icon className="h-4 w-4" />
+                    {c.title.replace(" Agent", "")}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {cases.map((c) => {
+                const res = responses[c.webhookAgent];
+                return (
+                  <TabsContent key={c.webhookAgent} value={c.webhookAgent} className="mt-6">
+                    <motion.div
+                      key={c.title}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="rounded-xl border border-border bg-card p-8 transition-all hover:border-primary/30 hover:glow-brown"
+                    >
                   {/* Header */}
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
