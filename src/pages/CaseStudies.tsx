@@ -2,7 +2,7 @@ import SEOHead from "@/components/SEOHead";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
-import { Youtube, Search, MapPin, Zap, Shield, BarChart3, Play, Loader2, X } from "lucide-react";
+import { Youtube, Search, MapPin, Zap, Shield, BarChart3, Play, Loader2, X, Download } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -180,6 +180,52 @@ const formatNum = (v: unknown): string => {
   const s = String(v).trim();
   const n = Number(s.replace(/,/g, ""));
   return Number.isFinite(n) && /^[\d,.]+$/.test(s) ? n.toLocaleString() : s;
+};
+
+const csvEscape = (v: unknown): string => {
+  if (v === undefined || v === null) return "";
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const downloadCsv = (agent: string, rows: VideoRow[]) => {
+  const headers = [
+    "Video Title",
+    "Link",
+    "Views",
+    "Likes",
+    "Comments",
+    "Channel Name",
+    "Channel URL",
+    "Subscribers",
+  ];
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.videoTitle,
+        r.link,
+        r.views,
+        r.likes,
+        r.comments,
+        r.channelName,
+        r.channelUrl,
+        r.subscribers,
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `${agent}-scrape-${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 const CaseStudies = () => {
@@ -421,6 +467,18 @@ const CaseStudies = () => {
                             }
                             return (
                               <div className="max-h-96 overflow-auto rounded-md border border-border">
+                                <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-3 py-2">
+                                  <span className="font-sans text-[11px] text-muted-foreground">
+                                    {rows.length} {rows.length === 1 ? "row" : "rows"}
+                                  </span>
+                                  <button
+                                    onClick={() => downloadCsv(c.webhookAgent, rows)}
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 font-sans text-[11px] font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    Export CSV
+                                  </button>
+                                </div>
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
