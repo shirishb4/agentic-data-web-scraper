@@ -6,6 +6,14 @@ import { Youtube, Search, MapPin, Zap, Shield, BarChart3, Play, Loader2, X } fro
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 const cases = [
   {
@@ -72,6 +80,106 @@ type ResponseState = {
   loading: boolean;
   data: unknown | null;
   error: string | null;
+};
+
+type VideoRow = {
+  videoTitle?: string;
+  link?: string;
+  views?: string | number;
+  likes?: string | number;
+  comments?: string | number;
+  channelName?: string;
+  channelUrl?: string;
+  subscribers?: string | number;
+};
+
+const pick = (obj: Record<string, unknown>, keys: string[]): unknown => {
+  for (const k of keys) {
+    const lk = k.toLowerCase();
+    for (const objKey of Object.keys(obj)) {
+      if (objKey.toLowerCase().replace(/[\s_-]/g, "") === lk.replace(/[\s_-]/g, "")) {
+        return obj[objKey];
+      }
+    }
+  }
+  return undefined;
+};
+
+const toRow = (item: unknown): VideoRow | null => {
+  if (!item || typeof item !== "object") return null;
+  const o = item as Record<string, unknown>;
+  const row: VideoRow = {
+    videoTitle: pick(o, ["videoTitle", "title", "video_title", "name"]) as string | undefined,
+    link: pick(o, ["link", "url", "videoUrl", "video_url", "videoLink"]) as string | undefined,
+    views: pick(o, ["views", "viewCount", "view_count"]) as string | number | undefined,
+    likes: pick(o, ["likes", "likeCount", "like_count"]) as string | number | undefined,
+    comments: pick(o, ["comments", "commentCount", "commentsCount", "comment_count"]) as
+      | string
+      | number
+      | undefined,
+    channelName: pick(o, ["channelName", "channel", "channel_name", "author"]) as string | undefined,
+    channelUrl: pick(o, ["channelUrl", "channel_url", "channelLink", "authorUrl"]) as
+      | string
+      | undefined,
+    subscribers: pick(o, ["subscribers", "subscriberCount", "subscriber_count", "subs"]) as
+      | string
+      | number
+      | undefined,
+  };
+  const hasAny = Object.values(row).some((v) => v !== undefined && v !== null && v !== "");
+  return hasAny ? row : null;
+};
+
+const extractRows = (data: unknown): VideoRow[] => {
+  if (data === null || data === undefined) return [];
+
+  // String — try JSON parse, else try to find JSON inside markdown/code fences
+  if (typeof data === "string") {
+    const trimmed = data.trim();
+    try {
+      return extractRows(JSON.parse(trimmed));
+    } catch {
+      // try to extract a JSON block
+      const match = trimmed.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+      if (match) {
+        try {
+          return extractRows(JSON.parse(match[0]));
+        } catch {
+          /* fall through */
+        }
+      }
+      return [];
+    }
+  }
+
+  if (Array.isArray(data)) {
+    const rows = data.map(toRow).filter(Boolean) as VideoRow[];
+    if (rows.length) return rows;
+    // maybe array of wrapped items
+    return data.flatMap(extractRows);
+  }
+
+  if (typeof data === "object") {
+    const o = data as Record<string, unknown>;
+    // common n8n chat output shapes
+    if ("output" in o) return extractRows(o.output);
+    if ("data" in o) return extractRows(o.data);
+    if ("results" in o) return extractRows(o.results);
+    if ("videos" in o) return extractRows(o.videos);
+    if ("items" in o) return extractRows(o.items);
+    const single = toRow(o);
+    return single ? [single] : [];
+  }
+
+  return [];
+};
+
+const formatNum = (v: unknown): string => {
+  if (v === undefined || v === null || v === "") return "—";
+  if (typeof v === "number") return v.toLocaleString();
+  const s = String(v).trim();
+  const n = Number(s.replace(/,/g, ""));
+  return Number.isFinite(n) && /^[\d,.]+$/.test(s) ? n.toLocaleString() : s;
 };
 
 const CaseStudies = () => {
@@ -298,11 +406,80 @@ const CaseStudies = () => {
                           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                             {res.error ? "Error" : "Response"}
                           </p>
-                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all leading-relaxed">
-                            {res.error
-                              ? res.error
-                              : JSON.stringify(res.data, null, 2)}
-                          </pre>
+                          {res.error ? (
+                            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all leading-relaxed">
+                              {res.error}
+                            </pre>
+                          ) : (() => {
+                            const rows = extractRows(res.data);
+                            if (!rows.length) {
+                              return (
+                                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all leading-relaxed">
+                                  {JSON.stringify(res.data, null, 2)}
+                                </pre>
+                              );
+                            }
+                            return (
+                              <div className="max-h-96 overflow-auto rounded-md border border-border">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Video Title</TableHead>
+                                      <TableHead>Link</TableHead>
+                                      <TableHead className="text-right">Views</TableHead>
+                                      <TableHead className="text-right">Likes</TableHead>
+                                      <TableHead className="text-right">Comments</TableHead>
+                                      <TableHead>Channel Name</TableHead>
+                                      <TableHead>Channel URL</TableHead>
+                                      <TableHead className="text-right">Subscribers</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {rows.map((r, idx) => (
+                                      <TableRow key={idx}>
+                                        <TableCell className="max-w-[260px] truncate font-sans">
+                                          {r.videoTitle ?? "—"}
+                                        </TableCell>
+                                        <TableCell className="font-sans">
+                                          {r.link ? (
+                                            <a
+                                              href={r.link}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-primary hover:underline"
+                                            >
+                                              Open
+                                            </a>
+                                          ) : (
+                                            "—"
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-right font-sans">{formatNum(r.views)}</TableCell>
+                                        <TableCell className="text-right font-sans">{formatNum(r.likes)}</TableCell>
+                                        <TableCell className="text-right font-sans">{formatNum(r.comments)}</TableCell>
+                                        <TableCell className="font-sans">{r.channelName ?? "—"}</TableCell>
+                                        <TableCell className="font-sans">
+                                          {r.channelUrl ? (
+                                            <a
+                                              href={r.channelUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-primary hover:underline"
+                                            >
+                                              Channel
+                                            </a>
+                                          ) : (
+                                            "—"
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-right font-sans">{formatNum(r.subscribers)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </motion.div>
                     )}
