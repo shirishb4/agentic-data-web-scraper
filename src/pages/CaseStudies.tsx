@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Youtube, Search, MapPin, Zap, Shield, BarChart3, Play, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
 
 const cases = [
   {
@@ -21,7 +22,10 @@ const cases = [
     ],
     stats: { pages: "50K+", accuracy: "99.2%", speed: "3K pages/hr" },
     webhookAgent: "youtube",
-    samplePayload: { url: "https://youtube.com/watch?v=example", extract: ["metadata", "comments"] },
+    inputLabel: "YouTube video URL or channel",
+    inputPlaceholder: "https://youtube.com/watch?v=...",
+    inputField: "url",
+    samplePayload: { extract: ["metadata", "comments"] },
   },
   {
     icon: Search,
@@ -37,7 +41,10 @@ const cases = [
     ],
     stats: { pages: "120K+", accuracy: "99.5%", speed: "5K queries/hr" },
     webhookAgent: "google",
-    samplePayload: { query: "ai web scraping tools", region: "us", device: "desktop" },
+    inputLabel: "Search query",
+    inputPlaceholder: "ai web scraping tools",
+    inputField: "query",
+    samplePayload: { region: "us", device: "desktop" },
   },
   {
     icon: MapPin,
@@ -53,7 +60,10 @@ const cases = [
     ],
     stats: { pages: "80K+", accuracy: "98.8%", speed: "2K pages/hr" },
     webhookAgent: "tripadvisor",
-    samplePayload: { url: "https://tripadvisor.com/Hotel-example", extract: ["reviews", "pricing"] },
+    inputLabel: "TripAdvisor listing URL",
+    inputPlaceholder: "https://tripadvisor.com/Hotel-...",
+    inputField: "url",
+    samplePayload: { extract: ["reviews", "pricing"] },
   },
 ];
 
@@ -66,6 +76,7 @@ type ResponseState = {
 
 const CaseStudies = () => {
   const [responses, setResponses] = useState<Record<string, ResponseState>>({});
+  const [inputs, setInputs] = useState<Record<string, string>>({});
 
   const triggerWebhook = async (agent: string, payload: Record<string, unknown>) => {
     setResponses((prev) => ({
@@ -193,7 +204,7 @@ const CaseStudies = () => {
                   </div>
 
                   {/* Webhook status + Try it */}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="mt-6 space-y-3">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="inline-block h-2 w-2 rounded-full bg-accent" />
                       Webhook agent:{" "}
@@ -202,18 +213,51 @@ const CaseStudies = () => {
                       </code>
                       <span className="text-muted-foreground/50">— ready for n8n integration</span>
                     </div>
-                    <button
-                      onClick={() => triggerWebhook(c.webhookAgent, c.samplePayload)}
-                      disabled={res?.loading}
-                      className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-50"
-                    >
-                      {res?.loading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Play className="h-3.5 w-3.5" />
-                      )}
-                      {res?.loading ? "Running…" : "Try it"}
-                    </button>
+                    <div>
+                      <label
+                        htmlFor={`input-${c.webhookAgent}`}
+                        className="block text-xs font-medium text-foreground"
+                      >
+                        {c.inputLabel}
+                      </label>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Enter a value below — it will be sent to the n8n webhook as{" "}
+                        <code className="rounded bg-secondary px-1 font-mono text-primary">
+                          {c.inputField}
+                        </code>
+                        .
+                      </p>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          id={`input-${c.webhookAgent}`}
+                          value={inputs[c.webhookAgent] ?? ""}
+                          onChange={(e) =>
+                            setInputs((prev) => ({ ...prev, [c.webhookAgent]: e.target.value }))
+                          }
+                          placeholder={c.inputPlaceholder}
+                          className="flex-1"
+                        />
+                        <button
+                          onClick={() => {
+                            const value = (inputs[c.webhookAgent] ?? "").trim();
+                            if (!value) return;
+                            triggerWebhook(c.webhookAgent, {
+                              ...c.samplePayload,
+                              [c.inputField]: value,
+                            });
+                          }}
+                          disabled={res?.loading || !(inputs[c.webhookAgent] ?? "").trim()}
+                          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-50"
+                        >
+                          {res?.loading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5" />
+                          )}
+                          {res?.loading ? "Running…" : "Try it"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Response preview */}
