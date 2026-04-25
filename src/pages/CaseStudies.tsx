@@ -97,6 +97,17 @@ const CaseStudies = () => {
         return;
       }
 
+      // The edge function always returns 200; check the body for an n8n-side error.
+      if (data && typeof data === "object" && "error" in (data as Record<string, unknown>)) {
+        const d = data as { error?: string; hint?: string; n8nResponse?: unknown };
+        const msg = [d.error, d.hint].filter(Boolean).join(" — ");
+        setResponses((prev) => ({
+          ...prev,
+          [agent]: { agent, loading: false, data: d.n8nResponse ?? null, error: msg || "Webhook error" },
+        }));
+        return;
+      }
+
       setResponses((prev) => ({
         ...prev,
         [agent]: { agent, loading: false, data, error: null },
