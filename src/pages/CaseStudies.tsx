@@ -2,7 +2,7 @@ import SEOHead from "@/components/SEOHead";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { motion, AnimatePresence } from "framer-motion";
-import { Youtube, Search, MapPin, Zap, Shield, BarChart3, Play, Loader2, X } from "lucide-react";
+import { Youtube, Search, MapPin, Zap, Shield, BarChart3, Play, Loader2, X, Download } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -180,6 +180,52 @@ const formatNum = (v: unknown): string => {
   const s = String(v).trim();
   const n = Number(s.replace(/,/g, ""));
   return Number.isFinite(n) && /^[\d,.]+$/.test(s) ? n.toLocaleString() : s;
+};
+
+const csvEscape = (v: unknown): string => {
+  if (v === undefined || v === null) return "";
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const downloadCsv = (agent: string, rows: VideoRow[]) => {
+  const headers = [
+    "Video Title",
+    "Link",
+    "Views",
+    "Likes",
+    "Comments",
+    "Channel Name",
+    "Channel URL",
+    "Subscribers",
+  ];
+  const lines = [headers.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.videoTitle,
+        r.link,
+        r.views,
+        r.likes,
+        r.comments,
+        r.channelName,
+        r.channelUrl,
+        r.subscribers,
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `${agent}-scrape-${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 const CaseStudies = () => {
