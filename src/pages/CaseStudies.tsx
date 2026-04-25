@@ -134,23 +134,83 @@ const toRow = (item: unknown): VideoRow | null => {
 const extractRows = (data: unknown): VideoRow[] => {
   if (data === null || data === undefined) return [];
 
-  // String — try JSON parse, else try to find JSON inside markdown/code fences
+  // String — try JSON parse, else try to find JSON / markdown table inside text
   if (typeof data === "string") {
-    const trimmed = data.trim();
+    let trimmed = data.trim();
+    // Strip ```json ... ``` or ``` ... ``` code fences
+    const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) trimmed = fence[1].trim();
+
+    // 1) Direct JSON parse
     try {
       return extractRows(JSON.parse(trimmed));
     } catch {
-      // try to extract a JSON block
-      const match = trimmed.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
-      if (match) {
+      /* fall through */
+    }
+
+    // 2) Find the largest JSON array first (most n8n agents return arrays)
+    const arrayMatch = trimmed.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        return extractRows(JSON.parse(arrayMatch[0]));
+      } catch {
+        /* fall through */
+      }
+    }
+
+    // 3) Multiple JSON objects concatenated / NDJSON
+    const objectMatches = trimmed.match(/\{[\s\S]*?\}(?=\s*[\{,\n]|\s*$)/g);
+    if (objectMatches && objectMatches.length > 1) {
+      const rows: VideoRow[] = [];
+      for (const m of objectMatches) {
         try {
-          return extractRows(JSON.parse(match[0]));
+          const parsed = JSON.parse(m);
+          rows.push(...extractRows(parsed));
         } catch {
-          /* fall through */
+          /* skip bad chunk */
         }
       }
-      return [];
+      if (rows.length) return rows;
     }
+
+    // 4) Single JSON object fallback
+    const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      try {
+        return extractRows(JSON.parse(objectMatch[0]));
+      } catch {
+        /* fall through */
+      }
+    }
+
+    // 5) Markdown table parser — | col1 | col2 | ...
+    const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().startsWith("|"));
+    if (lines.length >= 2) {
+      const split = (l: string) =>
+        l
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((c) => c.trim());
+      const headers = split(lines[0]).map((h) => h.toLowerCase());
+      // skip separator row (---)
+      const bodyStart = lines[1] && /^[\s|:-]+$/.test(lines[1]) ? 2 : 1;
+      const rows: VideoRow[] = [];
+      for (let i = bodyStart; i < lines.length; i++) {
+        const cells = split(lines[i]);
+        if (cells.every((c) => /^[-:\s]*$/.test(c))) continue;
+        const obj: Record<string, unknown> = {};
+        headers.forEach((h, idx) => {
+          obj[h] = cells[idx] ?? "";
+        });
+        const r = toRow(obj);
+        if (r) rows.push(r);
+      }
+      if (rows.length) return rows;
+    }
+
+    return [];
   }
 
   if (Array.isArray(data)) {
@@ -162,12 +222,13 @@ const extractRows = (data: unknown): VideoRow[] => {
 
   if (typeof data === "object") {
     const o = data as Record<string, unknown>;
-    // common n8n chat output shapes
-    if ("output" in o) return extractRows(o.output);
-    if ("data" in o) return extractRows(o.data);
-    if ("results" in o) return extractRows(o.results);
-    if ("videos" in o) return extractRows(o.videos);
-    if ("items" in o) return extractRows(o.items);
+    // common n8n chat output shapes — try unwrapping and aggregating
+    const wrappers = ["output", "data", "results", "videos", "items", "rows", "response", "result", "message", "text"];
+    const collected: VideoRow[] = [];
+    for (const w of wrappers) {
+      if (w in o) collected.push(...extractRows(o[w]));
+    }
+    if (collected.length) return collected;
     const single = toRow(o);
     return single ? [single] : [];
   }
