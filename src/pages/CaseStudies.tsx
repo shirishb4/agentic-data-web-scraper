@@ -255,6 +255,8 @@ const CaseStudies = () => {
                             triggerWebhook(c.webhookAgent, {
                               ...c.samplePayload,
                               [c.inputField]: value,
+                              chatInput: value,
+                              message: value,
                             });
                           }}
                           disabled={res?.loading || !(inputs[c.webhookAgent] ?? "").trim()}
