@@ -619,8 +619,10 @@ const CaseStudies = () => {
                     )}
                   </AnimatePresence>
                 </motion.div>
-              );
-            })}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
           </div>
         </section>
       </main>
