@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
   { label: "Case Studies", href: "/case-studies" },
@@ -14,6 +15,7 @@ const navLinks = [
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
@@ -35,12 +37,29 @@ const Navbar = () => {
               {link.label}
             </Link>
           ))}
-          <Link
-            to="/#demo"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
-          >
-            Request Demo
-          </Link>
+          {user ? (
+            <>
+              <Link
+                to="/dashboard"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/auth"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
 
         {/* Mobile toggle */}
@@ -69,13 +88,31 @@ const Navbar = () => {
                   {link.label}
                 </Link>
               ))}
-              <Link
-                to="/#demo"
-                onClick={() => setOpen(false)}
-                className="rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground"
-              >
-                Request Demo
-              </Link>
+              {user ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="text-sm font-medium text-muted-foreground hover:text-primary"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={() => { signOut(); setOpen(false); }}
+                    className="rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground"
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/auth"
+                  onClick={() => setOpen(false)}
+                  className="rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground"
+                >
+                  Sign in
+                </Link>
+              )}
             </div>
           </motion.div>
         )}
