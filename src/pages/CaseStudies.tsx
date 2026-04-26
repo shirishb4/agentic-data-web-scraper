@@ -94,38 +94,95 @@ type VideoRow = {
   subscribers?: string | number;
 };
 
-const pick = (obj: Record<string, unknown>, keys: string[]): unknown => {
-  for (const k of keys) {
-    const lk = k.toLowerCase();
-    for (const objKey of Object.keys(obj)) {
-      if (objKey.toLowerCase().replace(/[\s_-]/g, "") === lk.replace(/[\s_-]/g, "")) {
-        return obj[objKey];
-      }
+// Normalize a key for fuzzy matching: lowercase, strip non-alphanumerics
+const normKey = (k: string): string => k.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// Field aliases — every variant we want to recognize for each output column.
+// Add new aliases here to extend auto-mapping.
+const FIELD_ALIASES: Record<keyof VideoRow, string[]> = {
+  videoTitle: [
+    "videoTitle", "title", "video_title", "videoName", "video_name", "name",
+    "headline", "videoHeadline",
+  ],
+  link: [
+    "link", "url", "videoUrl", "video_url", "videoLink", "video_link",
+    "watchUrl", "watch_url", "href", "permalink", "shareUrl", "share_url",
+  ],
+  views: [
+    "views", "viewCount", "view_count", "viewsCount", "views_count",
+    "totalViews", "total_views", "playCount", "play_count", "plays",
+  ],
+  likes: [
+    "likes", "likeCount", "like_count", "likesCount", "likes_count",
+    "totalLikes", "total_likes", "thumbsUp", "thumbs_up", "reactions",
+  ],
+  comments: [
+    "comments", "commentCount", "commentsCount", "comment_count", "comments_count",
+    "totalComments", "total_comments", "numComments", "num_comments", "replies",
+  ],
+  channelName: [
+    "channelName", "channel", "channel_name", "channelTitle", "channel_title",
+    "author", "authorName", "author_name", "creator", "uploader", "uploaderName",
+    "ownerName", "owner",
+  ],
+  channelUrl: [
+    "channelUrl", "channel_url", "channelLink", "channel_link", "channelHref",
+    "authorUrl", "author_url", "authorLink", "author_link", "creatorUrl",
+    "uploaderUrl", "ownerUrl",
+  ],
+  subscribers: [
+    "subscribers", "subscriberCount", "subscriber_count", "subscribersCount",
+    "subscribers_count", "subs", "subCount", "sub_count", "followerCount",
+    "followers", "channelSubscribers",
+  ],
+};
+
+// Build a flat lookup of normalized keys → value, walking nested objects.
+// Nested keys are also exposed under their leaf name so `channel.name` matches `channelName`.
+const flattenKeys = (
+  obj: unknown,
+  out: Record<string, unknown> = {},
+  prefix = "",
+  depth = 0,
+): Record<string, unknown> => {
+  if (depth > 4 || !obj || typeof obj !== "object" || Array.isArray(obj)) return out;
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    const fullKey = prefix ? `${prefix}.${k}` : k;
+    const leafNorm = normKey(k);
+    const fullNorm = normKey(fullKey);
+    if (v !== null && typeof v !== "object") {
+      if (!(leafNorm in out)) out[leafNorm] = v;
+      out[fullNorm] = v;
+    } else if (v && typeof v === "object" && !Array.isArray(v)) {
+      flattenKeys(v, out, fullKey, depth + 1);
+    }
+  }
+  return out;
+};
+
+const pickField = (flat: Record<string, unknown>, aliases: string[]): unknown => {
+  for (const alias of aliases) {
+    const n = normKey(alias);
+    if (n in flat) {
+      const v = flat[n];
+      if (v !== undefined && v !== null && v !== "") return v;
     }
   }
   return undefined;
 };
 
 const toRow = (item: unknown): VideoRow | null => {
-  if (!item || typeof item !== "object") return null;
-  const o = item as Record<string, unknown>;
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const flat = flattenKeys(item);
   const row: VideoRow = {
-    videoTitle: pick(o, ["videoTitle", "title", "video_title", "name"]) as string | undefined,
-    link: pick(o, ["link", "url", "videoUrl", "video_url", "videoLink"]) as string | undefined,
-    views: pick(o, ["views", "viewCount", "view_count"]) as string | number | undefined,
-    likes: pick(o, ["likes", "likeCount", "like_count"]) as string | number | undefined,
-    comments: pick(o, ["comments", "commentCount", "commentsCount", "comment_count"]) as
-      | string
-      | number
-      | undefined,
-    channelName: pick(o, ["channelName", "channel", "channel_name", "author"]) as string | undefined,
-    channelUrl: pick(o, ["channelUrl", "channel_url", "channelLink", "authorUrl"]) as
-      | string
-      | undefined,
-    subscribers: pick(o, ["subscribers", "subscriberCount", "subscriber_count", "subs"]) as
-      | string
-      | number
-      | undefined,
+    videoTitle: pickField(flat, FIELD_ALIASES.videoTitle) as string | undefined,
+    link: pickField(flat, FIELD_ALIASES.link) as string | undefined,
+    views: pickField(flat, FIELD_ALIASES.views) as string | number | undefined,
+    likes: pickField(flat, FIELD_ALIASES.likes) as string | number | undefined,
+    comments: pickField(flat, FIELD_ALIASES.comments) as string | number | undefined,
+    channelName: pickField(flat, FIELD_ALIASES.channelName) as string | undefined,
+    channelUrl: pickField(flat, FIELD_ALIASES.channelUrl) as string | undefined,
+    subscribers: pickField(flat, FIELD_ALIASES.subscribers) as string | number | undefined,
   };
   const hasAny = Object.values(row).some((v) => v !== undefined && v !== null && v !== "");
   return hasAny ? row : null;
